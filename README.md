@@ -2,7 +2,7 @@
 
 **SkiRando Explorer** est une application web cartographique 3D 100% Front-End conçue pour la préparation de sorties en ski de randonnée dans les Alpes françaises. Elle regroupe les données topographiques, nivologiques et d'itinéraires sur une interface moderne et fluide.
 
-🌍 **[Découvrir l'application en direct](METS_TON_LIEN_GITHUB_PAGES_ICI)** *(Remplacez par votre lien GitHub Pages)*
+🌍 **[Découvrir l'application en direct](https://rqphametq.github.io/ski-rando-3D/)**
 
 ---
 
