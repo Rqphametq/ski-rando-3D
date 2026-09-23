@@ -1,0 +1,165 @@
+/* --- RESET PRO --- */
+* { box-sizing: border-box; outline: none; }
+
+/* LA DIVISION DE L'ÉCRAN EN DEUX (FLEXBOX) */
+body { 
+    margin: 0; padding: 0; font-family: 'Inter', sans-serif; background: #000; overflow: hidden; 
+    display: flex; /* Flexbox coupe l'écran horizontalement */
+    flex-direction: row;
+    height: 100vh;
+    width: 100vw;
+}
+
+/* LE PANNEAU FIXE À GAUCHE */
+#ui-panel {
+    width: 380px; /* Largeur fixe */
+    flex-shrink: 0; /* Empêche le panneau de s'écraser */
+    background: #18181b; /* Zinc 900 pur (plus de transparence) */
+    border-right: 1px solid rgba(255, 255, 255, 0.08);
+    display: flex; flex-direction: column;
+    height: 100vh; z-index: 10;
+    color: #e4e4e7; 
+}
+
+/* LA CARTE À DROITE */
+#map { 
+    flex-grow: 1; /* Prend 100% de la place restante à droite */
+    position: relative; 
+    height: 100%; 
+}
+
+.panel-header {
+    padding: 15px 20px; 
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    display: flex; justify-content: space-between; align-items: center;
+}
+.logo { display: flex; align-items: center; gap: 8px; }
+.logo h2 { margin: 0; font-size: 1.1rem; font-weight: 600; color: #fff; }
+.logo svg { width: 20px; height: 20px; color: #3b82f6; } 
+
+.icon-btn-small { background: transparent; border: none; color: #71717a; cursor: pointer; padding: 4px; border-radius: 4px; transition: 0.2s; display: flex; align-items: center; }
+.icon-btn-small:hover { color: #fff; background: rgba(255,255,255,0.1); }
+.icon-btn-small svg { width: 16px; height: 16px; }
+
+.panel-content { padding: 20px; overflow-y: auto; scroll-behavior: smooth; }
+.panel-content::-webkit-scrollbar { width: 8px; }
+.panel-content::-webkit-scrollbar-track { background: rgba(255,255,255,0.05); border-radius: 8px; margin: 10px 0; }
+.panel-content::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.3); border-radius: 8px; border: 2px solid #18181b; }
+.panel-content::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.5); }
+
+/* --- CONTRÔLES --- */
+.control-group { margin-bottom: 24px; }
+.control-group > label { display: flex; align-items: center; gap: 6px; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: #71717a; margin-bottom: 12px; font-weight: 600; }
+.control-group > label svg { width: 14px; height: 14px; }
+
+.input-modern { display: flex; align-items: center; gap: 10px; background: #27272a; border-radius: 8px; padding: 0 12px; border: 1px solid transparent; transition: 0.2s; }
+.input-modern:focus-within { border-color: #3b82f6; }
+.input-modern svg { width: 16px; color: #a1a1aa; }
+.input-modern input { background: transparent; border: none; color: #fff; padding: 10px 0; width: 100%; font-family: inherit; font-size: 0.9rem; }
+.input-modern input::-webkit-calendar-picker-indicator { filter: invert(1); opacity: 0.5; cursor: pointer; }
+
+.toggle-row { display: flex; justify-content: space-between; align-items: center; cursor: pointer; margin-bottom: 12px; font-size: 0.85rem; }
+.toggle-row input { display: none; }
+.toggle-switch { width: 36px; height: 20px; background: #3f3f46; border-radius: 20px; position: relative; transition: 0.2s; }
+.toggle-switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; background: #fff; border-radius: 50%; transition: 0.2s; }
+.toggle-row input:checked + .toggle-switch { background: #3b82f6; }
+.toggle-row input:checked + .toggle-switch::after { transform: translateX(16px); }
+
+/* Zone Dessin & Boutons */
+.box-draw { background: #1f1f22; padding: 15px; border-radius: 8px; }
+.buttons-row { display: flex; gap: 8px; margin-bottom: 8px; }
+button { font-family: inherit; font-size: 0.85rem; font-weight: 500; cursor: pointer; border-radius: 6px; transition: 0.2s; border: none; padding: 8px; }
+
+.btn-tool { flex: 1; background: #3f3f46; color: #fff; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 10px; }
+.btn-tool svg { width: 14px; height: 14px; }
+.btn-tool:hover { background: #52525b; }
+.btn-tool.active { background: #3b82f6; color: #fff; }
+
+.btn-primary { width: 100%; background: #fff; color: #000; font-weight: 600; padding: 8px 10px; }
+.btn-primary:hover { background: #f4f4f5; }
+
+.btn-secondary { width: 100%; background: transparent; color: #3b82f6; font-weight: 500; font-size: 0.85rem; padding: 8px 10px; border-radius: 6px; display: flex; align-items: center; justify-content: center; gap: 6px; transition: 0.2s; }
+.btn-secondary svg { width: 16px; height: 16px; }
+.btn-secondary:hover { background: rgba(59, 130, 246, 0.1); }
+
+
+.separator { border: 0; border-top: 1px solid rgba(255,255,255,0.06); margin: 0 0 24px 0; }
+
+/* --- CARTES DE DONNÉES --- */
+.empty-state { text-align: center; color: #71717a; padding: 20px 0; }
+.empty-state svg { width: 24px; margin-bottom: 8px; opacity: 0.5; }
+.empty-state p { margin: 0; font-size: 0.8rem; }
+
+.data-card { background: #1f1f22; border-radius: 8px; margin-bottom: 12px; overflow: hidden; }
+.card-title { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: #71717a; padding: 12px 15px; border-bottom: 1px solid rgba(255,255,255,0.04); background: #18181b; display:flex; align-items:center; gap:6px;}
+.card-title svg { width: 14px; }
+.card-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: rgba(255,255,255,0.04); }
+.card-stat { background: #1f1f22; padding: 12px 15px; display: flex; flex-direction: column; gap: 4px; }
+.card-stat.full { grid-column: span 2; }
+.stat-label { font-size: 0.7rem; color: #a1a1aa; text-transform: uppercase; letter-spacing: 0.05em;}
+.stat-value { font-size: 0.9rem; color: #fff; font-weight: 500; }
+.stat-value.alert { color: #ef4444; }
+
+.link-bera { display: flex; align-items:center; gap: 6px; padding: 12px 15px; font-size: 0.8rem; color: #3b82f6; text-decoration: none; }
+.link-bera:hover { text-decoration: underline; color:#fff; }
+
+/* --- LE RESTE DE TON CSS EXISTANT RESTE INTACT --- */
+
+/* NOUVEAU : ENVELOPPE DE LA CARTE */
+.map-wrapper {
+    flex-grow: 1;
+    position: relative;
+    height: 100%;
+}
+#map {
+    position: absolute;
+    top: 0; left: 0; width: 100%; height: 100%;
+}
+
+/* NOUVEAU : BARRE DE RECHERCHE (Vol 3D) */
+.search-container {
+    position: absolute;
+    top: 20px;
+    left: 20px; /* En haut à gauche de la carte */
+    z-index: 10;
+    background: rgba(24, 24, 27, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    width: 320px;
+    backdrop-filter: blur(10px);
+    display: flex;
+    align-items: center;
+    padding: 6px 12px;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+}
+
+.search-container svg { width: 18px; color: #a1a1aa; flex-shrink: 0; }
+
+.search-container input {
+    background: transparent; border: none; color: white;
+    padding: 8px 10px; width: 100%; outline: none; 
+    font-family: 'Inter', sans-serif; font-size: 0.9rem;
+}
+.search-container input::placeholder { color: #71717a; }
+
+.search-results {
+    position: absolute;
+    top: calc(100% + 5px); left: 0; right: 0;
+    background: rgba(24, 24, 27, 0.95);
+    list-style: none; padding: 0; margin: 0;
+    border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.08);
+    display: none;
+    max-height: 250px;
+    overflow-y: auto;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+}
+
+.search-results li {
+    padding: 12px; cursor: pointer;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    color: #e4e4e7; font-size: 0.85rem;
+}
+.search-results li:last-child { border-bottom: none; }
+.search-results li:hover { background: rgba(59, 130, 246, 0.2); color: #3b82f6; }
+.search-results li small { display: block; color: #71717a; font-size: 0.75rem; margin-top: 3px; }

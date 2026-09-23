@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ski Rando 3D Explorer</title>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
+    <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
+    <script src="https://unpkg.com/@mapbox/mapbox-gl-draw@1.4.3/dist/mapbox-gl-draw.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/@mapbox/mapbox-gl-draw@1.4.3/dist/mapbox-gl-draw.css" type="text/css" />
+    <script src="https://unpkg.com/togpx@0.5.4/togpx.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/togeojson/0.16.0/togeojson.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <link rel="stylesheet" href="style.css?v=7">
+    <link rel="icon" href="data:,">
+</head>
+<body>
+    
+    <!-- LE PANNEAU FIXE À GAUCHE -->
+    <aside id="ui-panel">
+        <header class="panel-header">
+            <div class="logo">
+                <i data-lucide="mountain"></i>
+                <h2>SkiRando Explorer</h2>
+            </div>
+            <button id="btn-rerun" class="icon-btn-small" title="Recharger l'application">
+                <i data-lucide="rotate-ccw"></i>
+            </button>
+        </header>
+        
+        <div class="panel-content">
+            <section class="control-group">
+                <label>Date d'analyse</label>
+                <div class="input-modern">
+                    <i data-lucide="calendar"></i>
+                    <input type="date" id="date-picker" value="2026-02-15">
+                </div>
+            </section>
+
+            <section class="control-group">
+                <label>Calques & Données</label>
+                <label class="toggle-row">
+                    <span>Tracés Ski de Rando (IGN)</span>
+                    <input type="checkbox" id="toggle-route" checked>
+                    <div class="toggle-switch"></div>
+                </label>
+                <label class="toggle-row">
+                    <span>Pentes Avalanche (>30°)</span>
+                    <input type="checkbox" id="toggle-slopes" checked>
+                    <div class="toggle-switch"></div>
+                </label>
+                <label class="toggle-row" style="color: #f59e0b;">
+                    <span>Cabanes & Refuges</span>
+                    <input type="checkbox" id="toggle-refuges" checked>
+                    <div class="toggle-switch"></div>
+                </label>
+            </section>
+            
+            <section class="control-group box-draw">
+                <label><i data-lucide="route"></i> Mon itinéraire (GPX)</label>
+                
+                <div class="buttons-row">
+                    <button id="btn-draw" class="btn-tool"><i data-lucide="pen-tool"></i> Tracer</button>
+                    <button id="btn-trash" class="btn-tool"><i data-lucide="trash-2"></i> Effacer</button>
+                </div>
+                <button id="btn-export-gpx" class="btn-primary" style="margin-bottom: 12px;">Télécharger le tracé (GPX)</button>
+                
+                <hr class="separator" style="margin: 12px 0;">
+                
+                <input type="file" id="gpx-input" accept=".gpx" style="display: none;">
+                <label for="gpx-input" class="btn-secondary" style="display: flex; padding: 10px; cursor: pointer; border: 1px dashed #3b82f6;">
+                    <i data-lucide="upload-cloud"></i> Importer un fichier GPX
+                </label>
+
+                <!-- Zone d'Analyse GPX & Graphique -->
+                <div id="gpx-analysis" style="display: none; margin-top: 12px;">
+                    <div id="gpx-stats" class="card-grid" style="background: rgba(0,0,0,0.2); border-radius: 6px; overflow:hidden;">
+                        <div class="card-stat full">
+                            <span class="stat-label">Distance totale</span>
+                            <span class="stat-value" id="stat-dist">0 km</span>
+                        </div>
+                        <div class="card-stat">
+                            <span class="stat-label">Dénivelé +</span>
+                            <span class="stat-value" id="stat-dplus" style="color: #10b981;">+0 m</span>
+                        </div>
+                        <div class="card-stat">
+                            <span class="stat-label">Dénivelé -</span>
+                            <span class="stat-value" id="stat-dminus" style="color: #ef4444;">-0 m</span>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-top: 12px; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 6px;">
+                        <span class="stat-label" style="display:flex; justify-content:space-between; margin-bottom: 8px;">
+                            Profil Altimétrique <i data-lucide="mouse-pointer-2" style="width:12px; color:#a1a1aa;"></i>
+                        </span>
+                        <div style="position: relative; height: 120px; width: 100%;">
+                            <canvas id="elevation-chart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <hr class="separator">
+
+            <div id="meteo-box">
+                <div class="empty-state">
+                    <i data-lucide="mouse-pointer-click"></i>
+                    <p>Cliquez sur la carte pour analyser un versant</p>
+                </div>
+            </div>
+            
+            <div id="bera-box"></div>
+        </div>
+    </aside>
+
+    <!-- LA CARTE 3D ET LA BARRE DE RECHERCHE -->
+    <div class="map-wrapper">
+        <div id="map"></div>
+        
+        <!-- NOUVEAU : Barre de recherche Vol 3D -->
+        <div class="search-container">
+            <i data-lucide="search"></i>
+            <input type="text" id="search-input" placeholder="Rechercher un sommet, un lieu..." autocomplete="off">
+            <ul id="search-results" class="search-results"></ul>
+        </div>
+    </div>
+
+    <script src="app.js?v=7"></script>
+</body>
+</html>
