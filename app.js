@@ -1,6 +1,5 @@
 lucide.createIcons();
 
-// --- INITIALISATION DE LA CARTE ---
 const map = new maplibregl.Map({
     container: 'map',
     style: {
@@ -24,8 +23,23 @@ map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-
 
 document.getElementById('btn-rerun').addEventListener('click', () => window.location.reload());
 
-// --- CALQUES, REFUGES & CURSEUR GRAPHIQUE ---
 map.on('load', () => {
+    
+    // OMBRES EXTRÊMES : Contraste maximum et teinte bleu profond
+    map.addLayer({
+        id: 'sun-hillshade',
+        type: 'hillshade',
+        source: 'terrain-source',
+        layout: { visibility: 'none' },
+        paint: {
+            'hillshade-illumination-anchor': 'map',
+            'hillshade-exaggeration': 1.0, // Force maximale permise par le moteur
+            'hillshade-shadow-color': 'rgba(4, 28, 59, 0.95)', // Bleu très sombre et très opaque
+            'hillshade-highlight-color': 'rgba(255, 255, 255, 0)', // Totalement transparent au soleil
+            'hillshade-accent-color': 'rgba(0, 0, 0, 0)'
+        }
+    }, 'ign-skitour-layer');
+
     document.getElementById('toggle-route').addEventListener('change', (e) => map.setLayoutProperty('ign-skitour-layer', 'visibility', e.target.checked ? 'visible' : 'none'));
     document.getElementById('toggle-slopes').addEventListener('change', (e) => map.setLayoutProperty('ign-slopes-layer', 'visibility', e.target.checked ? 'visible' : 'none'));
     document.getElementById('toggle-refuges').addEventListener('change', (e) => map.setLayoutProperty('refuges-layer', 'visibility', e.target.checked ? 'visible' : 'none'));
@@ -33,30 +47,69 @@ map.on('load', () => {
     map.addSource('imported-gpx', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
     map.addLayer({ id: 'imported-gpx-layer', type: 'line', source: 'imported-gpx', paint: { 'line-color': '#d946ef', 'line-width': 5, 'line-opacity': 0.9 } });
 
-    // NOUVEAU : Le curseur dynamique qui suit le graphique
     map.addSource('chart-cursor-source', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
-    map.addLayer({
-        id: 'chart-cursor-layer',
-        type: 'circle',
-        source: 'chart-cursor-source',
-        paint: {
-            'circle-radius': 6,
-            'circle-color': '#fff',
-            'circle-stroke-width': 3,
-            'circle-stroke-color': '#d946ef'
-        }
-    });
+    map.addLayer({ id: 'chart-cursor-layer', type: 'circle', source: 'chart-cursor-source', paint: { 'circle-radius': 6, 'circle-color': '#fff', 'circle-stroke-width': 3, 'circle-stroke-color': '#d946ef' } });
 
     map.addSource('refuges-source', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
-    map.addLayer({
-        id: 'refuges-layer', type: 'circle', source: 'refuges-source',
-        paint: { 'circle-color': '#f59e0b', 'circle-radius': 7, 'circle-stroke-width': 2, 'circle-stroke-color': '#fff' }
-    });
+    map.addLayer({ id: 'refuges-layer', type: 'circle', source: 'refuges-source', paint: { 'circle-color': '#f59e0b', 'circle-radius': 7, 'circle-stroke-width': 2, 'circle-stroke-color': '#fff' } });
 
     fetchRefugesInView();
 });
 
-// --- BARRE DE RECHERCHE VOL 3D (Nominatim API) ---
+const toggleSun = document.getElementById('toggle-sun');
+const sunContainer = document.getElementById('sun-slider-container');
+const nightOverlay = document.getElementById('night-overlay');
+
+toggleSun.addEventListener('change', (e) => {
+    if (e.target.checked) {
+        sunContainer.style.display = 'block';
+        if (map.getLayer('sun-hillshade')) map.setLayoutProperty('sun-hillshade', 'visibility', 'visible');
+        updateSunlight(); 
+    } else {
+        sunContainer.style.display = 'none';
+        if (map.getLayer('sun-hillshade')) map.setLayoutProperty('sun-hillshade', 'visibility', 'none');
+        if (nightOverlay) nightOverlay.style.opacity = '0';
+    }
+});
+
+function updateSunlight() {
+    if (!toggleSun.checked || !map.getLayer('sun-hillshade')) return;
+
+    const dateStr = document.getElementById('date-picker').value;
+    const timeVal = parseFloat(document.getElementById('time-slider').value);
+    
+    const hours = Math.floor(timeVal);
+    const minutes = (timeVal % 1) * 60;
+    document.getElementById('time-display').innerText = `${hours.toString().padStart(2, '0')}:${minutes === 0 ? '00' : minutes}`;
+
+    const date = new Date(dateStr);
+    date.setHours(hours, minutes, 0, 0);
+
+    const center = map.getCenter();
+    const sunPos = SunCalc.getPosition(date, center.lat, center.lng);
+    
+    let azimuth = (sunPos.azimuth * 180 / Math.PI) + 180;
+    if (azimuth > 360) azimuth -= 360;
+    const altitude = sunPos.altitude * 180 / Math.PI;
+
+    map.setPaintProperty('sun-hillshade', 'hillshade-illumination-direction', azimuth);
+
+    if (nightOverlay) {
+        if (altitude < -5) {
+            nightOverlay.style.opacity = '0.7'; 
+        } else if (altitude < 10) {
+            let opacity = 0.7 * (1 - ((altitude + 5) / 15));
+            nightOverlay.style.opacity = opacity.toString();
+        } else {
+            nightOverlay.style.opacity = '0'; 
+        }
+    }
+}
+
+document.getElementById('time-slider').addEventListener('input', updateSunlight);
+document.getElementById('date-picker').addEventListener('change', updateSunlight);
+map.on('move', updateSunlight); 
+
 const searchInput = document.getElementById('search-input');
 const searchResults = document.getElementById('search-results');
 let searchTimeout = null;
@@ -64,18 +117,12 @@ let searchTimeout = null;
 searchInput.addEventListener('input', (e) => {
     clearTimeout(searchTimeout);
     const query = e.target.value.trim();
-    
-    if (query.length < 3) {
-        searchResults.style.display = 'none';
-        return;
-    }
+    if (query.length < 3) { searchResults.style.display = 'none'; return; }
 
     searchTimeout = setTimeout(async () => {
         try {
-            // On ajoute "Alpes" ou "France" pour orienter la recherche
             const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query + ' Alpes')}&format=json&limit=5`);
             const data = await res.json();
-            
             searchResults.innerHTML = '';
             if (data.length > 0) {
                 searchResults.style.display = 'block';
@@ -84,23 +131,18 @@ searchInput.addEventListener('input', (e) => {
                     const nomCourt = item.display_name.split(',')[0];
                     const details = item.display_name.split(',').slice(1, 3).join(',');
                     li.innerHTML = `<b>${nomCourt}</b><br><small>${details}</small>`;
-                    
                     li.addEventListener('click', () => {
-                        // VOL 3D MAGIQUE
                         map.flyTo({ center: [item.lon, item.lat], zoom: 14.5, pitch: 75, bearing: -20, duration: 4000 });
                         searchResults.style.display = 'none';
                         searchInput.value = nomCourt;
                     });
                     searchResults.appendChild(li);
                 });
-            } else {
-                searchResults.style.display = 'none';
-            }
-        } catch (err) { console.error(err); }
-    }, 500); // Attend 500ms après la frappe pour chercher
+            } else { searchResults.style.display = 'none'; }
+        } catch (err) {}
+    }, 500);
 });
 
-// --- REFUGES ---
 let refugesTimeout = null;
 map.on('moveend', () => {
     if (map.getZoom() > 10) { clearTimeout(refugesTimeout); refugesTimeout = setTimeout(fetchRefugesInView, 1000); }
@@ -113,7 +155,7 @@ async function fetchRefugesInView() {
     try {
         const response = await fetch(url);
         const data = await response.json();
-        map.getSource('refuges-source').setData(data);
+        if(map.getSource('refuges-source')) map.getSource('refuges-source').setData(data);
     } catch(err) {}
 }
 
@@ -127,8 +169,6 @@ map.on('click', 'refuges-layer', (e) => {
 map.on('mouseenter', 'refuges-layer', () => map.getCanvas().style.cursor = 'pointer');
 map.on('mouseleave', 'refuges-layer', () => map.getCanvas().style.cursor = '');
 
-
-// --- DESSIN ET EXPORT ---
 const draw = new MapboxDraw({ displayControlsDefault: false });
 map.addControl(draw); 
 
@@ -138,7 +178,7 @@ document.getElementById('btn-trash').addEventListener('click', () => {
     draw.deleteAll(); 
     btnDraw.classList.remove('active'); 
     document.getElementById('gpx-analysis').style.display = 'none';
-    map.getSource('chart-cursor-source').setData({ type: 'FeatureCollection', features: [] }); // Cache le point
+    if(map.getSource('chart-cursor-source')) map.getSource('chart-cursor-source').setData({ type: 'FeatureCollection', features: [] });
 });
 map.on('draw.create', () => { btnDraw.classList.remove('active'); });
 
@@ -155,9 +195,8 @@ document.getElementById('btn-export-gpx').addEventListener('click', () => {
     document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
 });
 
-// --- IMPORT GPX, STATS ET CHART.JS (AVEC SURVOL) ---
 let elevationChart = null; 
-let gpxCoordinatesList = []; // Stocke les [Lng, Lat] pour la synchronisation du survol
+let gpxCoordinatesList = []; 
 
 document.getElementById('gpx-input').addEventListener('change', function(e) {
     const file = e.target.files[0];
@@ -196,7 +235,7 @@ function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) {
 function calculateGPXStats(geoJson) {
     let totalDist = 0, dPlus = 0, dMinus = 0;
     const chartLabels = [], chartData = [];
-    gpxCoordinatesList = []; // Reset global
+    gpxCoordinatesList = []; 
     
     geoJson.features.forEach(feature => {
         let coords = feature.geometry.coordinates;
@@ -219,7 +258,7 @@ function calculateGPXStats(geoJson) {
                 else if (eleDiff < 0) dMinus += Math.abs(eleDiff); 
                 chartLabels.push(totalDist.toFixed(1));
                 chartData.push(p2[2]);
-                gpxCoordinatesList.push([p2[0], p2[1]]); // On stocke la coordonnée GPS
+                gpxCoordinatesList.push([p2[0], p2[1]]); 
             }
         }
     });
@@ -248,18 +287,14 @@ function renderElevationChart(labels, data) {
         },
         options: {
             responsive: true, maintainAspectRatio: false,
-            // NOUVEAU : Interaction Graphique -> Carte 3D
             onHover: (event, chartElements) => {
                 if (chartElements.length > 0) {
-                    const dataIndex = chartElements[0].index;
-                    const coord = gpxCoordinatesList[dataIndex];
+                    const coord = gpxCoordinatesList[chartElements[0].index];
                     if (coord && map.getSource('chart-cursor-source')) {
                         map.getSource('chart-cursor-source').setData({ type: 'Point', coordinates: coord });
                     }
                 } else {
-                    if(map.getSource('chart-cursor-source')) {
-                        map.getSource('chart-cursor-source').setData({ type: 'FeatureCollection', features: [] });
-                    }
+                    if(map.getSource('chart-cursor-source')) map.getSource('chart-cursor-source').setData({ type: 'FeatureCollection', features: [] });
                 }
             },
             plugins: {
@@ -274,32 +309,9 @@ function renderElevationChart(labels, data) {
     });
 }
 
-// --- MASSIFS & SONDE (LE RETOUR DU BERA) ---
-function detectMassif(lat, lng) {
-    const massifs = [
-        { name: "Chablais", latMin: 46.10, latMax: 46.40, lngMin: 6.40, lngMax: 6.90 },
-        { name: "Mont-Blanc", latMin: 45.75, latMax: 46.05, lngMin: 6.70, lngMax: 7.10 },
-        { name: "Aravis", latMin: 45.80, latMax: 46.05, lngMin: 6.25, lngMax: 6.65 },
-        { name: "Bauges", latMin: 45.55, latMax: 45.80, lngMin: 5.95, lngMax: 6.30 },
-        { name: "Beaufortain", latMin: 45.55, latMax: 45.75, lngMin: 6.50, lngMax: 6.80 },
-        { name: "Haute-Tarentaise", latMin: 45.45, latMax: 45.75, lngMin: 6.80, lngMax: 7.15 },
-        { name: "Vanoise", latMin: 45.25, latMax: 45.50, lngMin: 6.60, lngMax: 7.00 },
-        { name: "Haute-Maurienne", latMin: 45.15, latMax: 45.40, lngMin: 6.80, lngMax: 7.20 },
-        { name: "Maurienne", latMin: 45.15, latMax: 45.40, lngMin: 6.20, lngMax: 6.60 },
-        { name: "Chartreuse", latMin: 45.25, latMax: 45.50, lngMin: 5.70, lngMax: 5.95 },
-        { name: "Belledonne", latMin: 45.10, latMax: 45.40, lngMin: 5.90, lngMax: 6.20 },
-        { name: "Grandes Rousses", latMin: 45.05, latMax: 45.20, lngMin: 6.05, lngMax: 6.25 },
-        { name: "Oisans", latMin: 44.80, latMax: 45.05, lngMin: 5.90, lngMax: 6.40 },
-        { name: "Vercors", latMin: 44.75, latMax: 45.25, lngMin: 5.30, lngMax: 5.70 }
-    ];
-    for (let m of massifs) if (lat >= m.latMin && lat <= m.latMax && lng >= m.lngMin && lng <= m.lngMax) return m.name;
-    return "Hors Massif";
-}
-
 map.on('click', async (e) => {
     const features = map.queryRenderedFeatures(e.point, { layers: ['refuges-layer'] });
     if (features.length > 0) return;
-
     try { if (draw.getMode() === 'draw_line_string' || draw.getMode() === 'direct_select') return; } catch (err) {}
 
     const lng = e.lngLat.lng, lat = e.lngLat.lat;
@@ -311,7 +323,6 @@ map.on('click', async (e) => {
     beraBox.innerHTML = '';
     lucide.createIcons();
 
-    const massifName = detectMassif(lat, lng);
     const eleCenter = map.queryTerrainElevation([lng, lat]);
     let slopeDeg = "N/D", aspectName = "N/D", slopeClass = "";
 
@@ -350,7 +361,6 @@ map.on('click', async (e) => {
         let snowStr = noonSnow !== null ? noonSnow + ' m' : 'N/D';
         if (noonSnow > 20) snowStr = 'Absence de données';
 
-        // LE BERA (Historique des 10 derniers jours)
         const dObj = new Date(selectedDate);
         dObj.setDate(dObj.getDate() - 10);
         const past10Days = dObj.toISOString().split('T')[0];
@@ -375,36 +385,34 @@ map.on('click', async (e) => {
         }
 
         meteoBox.innerHTML = `
-            <div class="data-card">
-                <div class="card-title"><i data-lucide="mountain"></i> Topographie</div>
+            <div class="data-card"><div class="card-title"><i data-lucide="mountain"></i> Topographie</div>
                 <div class="card-grid">
                     <div class="card-stat"><span class="stat-label">Altitude</span><span class="stat-value">${absoluteElevation} m</span></div>
                     <div class="card-stat"><span class="stat-label">Versant</span><span class="stat-value">${aspectName}</span></div>
                     <div class="card-stat full"><span class="stat-label">Pente locale</span><span class="stat-value ${slopeClass}">${slopeDeg}°</span></div>
                 </div>
             </div>
-            <div class="data-card">
-                <div class="card-title"><i data-lucide="snowflake"></i> Météo & Neige</div>
+            <div class="data-card"><div class="card-title"><i data-lucide="snowflake"></i> Météo & Neige</div>
                 <div class="card-grid">
                     <div class="card-stat"><span class="stat-label">Température</span><span class="stat-value">${noonTemp !== null ? noonTemp + ' °C' : 'N/D'}</span></div>
                     <div class="card-stat"><span class="stat-label">Épaisseur</span><span class="stat-value">${snowStr}</span></div>
                 </div>
-            </div>
-        `;
+            </div>`;
 
         beraBox.innerHTML = `
-            <div class="data-card">
-                <div class="card-title"><i data-lucide="triangle-alert"></i> Avalanche (BERA)</div>
+            <div class="data-card"><div class="card-title"><i data-lucide="triangle-alert"></i> Avalanche (BERA)</div>
                 <div class="card-grid">
                     <div class="card-stat full"><span class="stat-label">Massif détecté</span><span class="stat-value" style="color:#3b82f6;">${massifName}</span></div>
                     <div class="card-stat"><span class="stat-label">Dernière Neige</span><span class="stat-value">${lastSnowDate}</span></div>
                     <div class="card-stat"><span class="stat-label">Quantité</span><span class="stat-value">${lastSnowAmount}</span></div>
                 </div>
-                <a href="https://meteofrance.com/meteo-montagne/alpes-du-nord/risques-avalanche" target="_blank" class="link-bera"><i data-lucide="external-link" style="width:14px;"></i> Lire le bulletin Météo France</a>
-            </div>
-        `;
+                <a href="https://meteofrance.com/meteo-montagne/alpes-du-nord/risques-avalanche" target="_blank" class="link-bera"><i data-lucide="external-link" style="width:14px;"></i> Bulletin Météo France</a>
+            </div>`;
+            
         lucide.createIcons();
-        setTimeout(() => { panelContent.scrollTo({ top: panelContent.scrollHeight, behavior: 'smooth' }); }, 100);
+        if (panelContent) {
+            setTimeout(() => { panelContent.scrollTo({ top: panelContent.scrollHeight, behavior: 'smooth' }); }, 100);
+        }
 
     } catch (error) { meteoBox.innerHTML = `<div class="empty-state"><p>Erreur réseau lors de l'analyse.</p></div>`; }
 });
