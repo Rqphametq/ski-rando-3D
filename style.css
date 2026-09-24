@@ -163,3 +163,42 @@ button { font-family: inherit; font-size: 0.85rem; font-weight: 500; cursor: poi
 .search-results li:last-child { border-bottom: none; }
 .search-results li:hover { background: rgba(59, 130, 246, 0.2); color: #3b82f6; }
 .search-results li small { display: block; color: #71717a; font-size: 0.75rem; margin-top: 3px; }
+
+/* --- CONTRÔLES MAPLIBRE (Zoom & Boussole) --- */
+.maplibregl-ctrl-top-right {
+    right: 40px !important; /* Laisse 20 pixels d'espace avec le bord droit */
+    top: 20px !important;   /* Aligne les boutons avec ta barre de recherche */
+}
+
+/* Optionnel : Rendre les boutons un peu plus grands et confortables à cliquer */
+.maplibregl-ctrl-group button {
+    width: 36px !important;
+    height: 36px !important;
+}
+
+/* --- ENCART ASTUCE 3D --- */
+.keyboard-shortcuts {
+    margin-top: 20px;
+    padding: 12px;
+    background: rgba(59, 130, 246, 0.05); /* Fond légèrement bleuté */
+    border: 1px dashed rgba(59, 130, 246, 0.3); /* Bordure en pointillés */
+    border-radius: 8px;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    font-size: 0.75rem;
+    color: #a1a1aa; /* Gris clair */
+    line-height: 1.4;
+}
+
+.keyboard-shortcuts svg {
+    width: 16px;
+    height: 16px;
+    color: #3b82f6; /* Bleu */
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.keyboard-shortcuts b {
+    color: #e4e4e7; /* Blanc cassé pour faire ressortir les mots clés */
+}

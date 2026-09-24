@@ -348,7 +348,7 @@ map.on('click', async (e) => {
         const noonTemp = data.hourly.temperature_2m[12];
         let noonSnow = data.hourly.snow_depth[12];
         let snowStr = noonSnow !== null ? noonSnow + ' m' : 'N/D';
-        if (noonSnow > 10) snowStr = 'Glacier';
+        if (noonSnow > 20) snowStr = 'Absence de données';
 
         // LE BERA (Historique des 10 derniers jours)
         const dObj = new Date(selectedDate);
