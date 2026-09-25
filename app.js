@@ -25,7 +25,7 @@ document.getElementById('btn-rerun').addEventListener('click', () => window.loca
 
 map.on('load', () => {
     
-    // OMBRES EXTRÊMES : Contraste maximum et teinte bleu profond
+    // OMBRES EXTRÊMES
     map.addLayer({
         id: 'sun-hillshade',
         type: 'hillshade',
@@ -33,9 +33,9 @@ map.on('load', () => {
         layout: { visibility: 'none' },
         paint: {
             'hillshade-illumination-anchor': 'map',
-            'hillshade-exaggeration': 1.0, // Force maximale permise par le moteur
-            'hillshade-shadow-color': 'rgba(4, 28, 59, 0.95)', // Bleu très sombre et très opaque
-            'hillshade-highlight-color': 'rgba(255, 255, 255, 0)', // Totalement transparent au soleil
+            'hillshade-exaggeration': 1.0, 
+            'hillshade-shadow-color': 'rgba(4, 28, 59, 0.95)', 
+            'hillshade-highlight-color': 'rgba(255, 255, 255, 0)', 
             'hillshade-accent-color': 'rgba(0, 0, 0, 0)'
         }
     }, 'ign-skitour-layer');
@@ -309,6 +309,29 @@ function renderElevationChart(labels, data) {
     });
 }
 
+// LA FONCTION MANQUANTE EST DE RETOUR ICI !
+function detectMassif(lat, lng) {
+    const massifs = [
+        { name: "Chablais", latMin: 46.10, latMax: 46.40, lngMin: 6.40, lngMax: 6.90 },
+        { name: "Mont-Blanc", latMin: 45.75, latMax: 46.05, lngMin: 6.70, lngMax: 7.10 },
+        { name: "Aravis", latMin: 45.80, latMax: 46.05, lngMin: 6.25, lngMax: 6.65 },
+        { name: "Bauges", latMin: 45.55, latMax: 45.80, lngMin: 5.95, lngMax: 6.30 },
+        { name: "Beaufortain", latMin: 45.55, latMax: 45.75, lngMin: 6.50, lngMax: 6.80 },
+        { name: "Haute-Tarentaise", latMin: 45.45, latMax: 45.75, lngMin: 6.80, lngMax: 7.15 },
+        { name: "Vanoise", latMin: 45.25, latMax: 45.50, lngMin: 6.60, lngMax: 7.00 },
+        { name: "Haute-Maurienne", latMin: 45.15, latMax: 45.40, lngMin: 6.80, lngMax: 7.20 },
+        { name: "Maurienne", latMin: 45.15, latMax: 45.40, lngMin: 6.20, lngMax: 6.60 },
+        { name: "Chartreuse", latMin: 45.25, latMax: 45.50, lngMin: 5.70, lngMax: 5.95 },
+        { name: "Belledonne", latMin: 45.10, latMax: 45.40, lngMin: 5.90, lngMax: 6.20 },
+        { name: "Grandes Rousses", latMin: 45.05, latMax: 45.20, lngMin: 6.05, lngMax: 6.25 },
+        { name: "Oisans", latMin: 44.80, latMax: 45.05, lngMin: 5.90, lngMax: 6.40 },
+        { name: "Vercors", latMin: 44.75, latMax: 45.25, lngMin: 5.30, lngMax: 5.70 }
+    ];
+    for (let m of massifs) if (lat >= m.latMin && lat <= m.latMax && lng >= m.lngMin && lng <= m.lngMax) return m.name;
+    return "Hors Massif";
+}
+
+// --- SONDE TERRAIN & BERA (SÉCURISÉE) ---
 map.on('click', async (e) => {
     const features = map.queryRenderedFeatures(e.point, { layers: ['refuges-layer'] });
     if (features.length > 0) return;
@@ -323,6 +346,7 @@ map.on('click', async (e) => {
     beraBox.innerHTML = '';
     lucide.createIcons();
 
+    // 1. CALCUL TOPOGRAPHIQUE (100% Local, n'échoue jamais)
     const eleCenter = map.queryTerrainElevation([lng, lat]);
     let slopeDeg = "N/D", aspectName = "N/D", slopeClass = "";
 
@@ -342,24 +366,37 @@ map.on('click', async (e) => {
         aspectName = compass[Math.round(aspectDeg / 45) % 8];
     }
 
+    const massifName = detectMassif(lat, lng);
+
+    // Variables Météo par défaut si l'API échoue
+    let absoluteElevation = eleCenter ? Math.round(eleCenter) : "N/D";
+    let noonTemp = "N/D", snowStr = "N/D", lastSnowDate = "N/D", lastSnowAmount = "-";
+
+    // 2. APPELS API (Isolés pour ne pas faire planter la topo)
     try {
         const eleRes = await fetch(`https://api.open-meteo.com/v1/elevation?latitude=${lat}&longitude=${lng}`);
-        const eleData = await eleRes.json();
-        const absoluteElevation = eleData.elevation ? Math.round(eleData.elevation[0]) : "N/D";
+        if(eleRes.ok) {
+            const eleData = await eleRes.json();
+            if(eleData.elevation) absoluteElevation = Math.round(eleData.elevation[0]);
+        }
+        
         const eleParam = absoluteElevation !== "N/D" ? `&elevation=${absoluteElevation}` : "";
-
         const selectedDate = document.getElementById('date-picker').value;
         const diffDays = Math.ceil((new Date() - new Date(selectedDate)) / (1000 * 60 * 60 * 24)); 
+        
         let apiUrl = diffDays > 90 
             ? `https://archive-api.open-meteo.com/v1/archive?latitude=${lat}&longitude=${lng}${eleParam}&start_date=${selectedDate}&end_date=${selectedDate}&hourly=temperature_2m,snow_depth`
             : `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}${eleParam}&start_date=${selectedDate}&end_date=${selectedDate}&hourly=temperature_2m,snow_depth`;
 
         const response = await fetch(apiUrl);
-        const data = await response.json();
-        const noonTemp = data.hourly.temperature_2m[12];
-        let noonSnow = data.hourly.snow_depth[12];
-        let snowStr = noonSnow !== null ? noonSnow + ' m' : 'N/D';
-        if (noonSnow > 20) snowStr = 'Absence de données';
+        if (response.ok) {
+            const data = await response.json();
+            if(data.hourly && data.hourly.temperature_2m) {
+                noonTemp = data.hourly.temperature_2m[12] + ' °C';
+                let noonSnow = data.hourly.snow_depth[12];
+                if(noonSnow !== null && noonSnow !== undefined) snowStr = noonSnow > 20 ? 'Hors limites' : noonSnow + ' m';
+            }
+        }
 
         const dObj = new Date(selectedDate);
         dObj.setDate(dObj.getDate() - 10);
@@ -370,49 +407,51 @@ map.on('click', async (e) => {
             : `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}${eleParam}&start_date=${past10Days}&end_date=${selectedDate}&daily=snowfall_sum&timezone=Europe/Berlin`;
             
         const historyRes = await fetch(historyUrl);
-        const historyData = await historyRes.json();
-        
-        let lastSnowDate = "Aucune (10j)", lastSnowAmount = "-";
-        if (historyData.daily && historyData.daily.snowfall_sum) {
-            for (let i = historyData.daily.time.length - 1; i >= 0; i--) {
-                if (historyData.daily.snowfall_sum[i] > 0.5) {
-                    const d = new Date(historyData.daily.time[i]);
-                    lastSnowDate = d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
-                    lastSnowAmount = historyData.daily.snowfall_sum[i] + ' cm';
-                    break;
+        if (historyRes.ok) {
+            const historyData = await historyRes.json();
+            if (historyData.daily && historyData.daily.snowfall_sum) {
+                for (let i = historyData.daily.time.length - 1; i >= 0; i--) {
+                    if (historyData.daily.snowfall_sum[i] > 0.5) {
+                        const d = new Date(historyData.daily.time[i]);
+                        lastSnowDate = d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+                        lastSnowAmount = historyData.daily.snowfall_sum[i] + ' cm';
+                        break;
+                    }
                 }
             }
         }
+    } catch (error) {
+        console.warn("Erreur silencieuse API Météo (date probablement hors limites).");
+    }
 
-        meteoBox.innerHTML = `
-            <div class="data-card"><div class="card-title"><i data-lucide="mountain"></i> Topographie</div>
-                <div class="card-grid">
-                    <div class="card-stat"><span class="stat-label">Altitude</span><span class="stat-value">${absoluteElevation} m</span></div>
-                    <div class="card-stat"><span class="stat-label">Versant</span><span class="stat-value">${aspectName}</span></div>
-                    <div class="card-stat full"><span class="stat-label">Pente locale</span><span class="stat-value ${slopeClass}">${slopeDeg}°</span></div>
-                </div>
+    // 3. AFFICHAGE (Fonctionne même si la météo a échoué)
+    meteoBox.innerHTML = `
+        <div class="data-card"><div class="card-title"><i data-lucide="mountain"></i> Topographie</div>
+            <div class="card-grid">
+                <div class="card-stat"><span class="stat-label">Altitude</span><span class="stat-value">${absoluteElevation} m</span></div>
+                <div class="card-stat"><span class="stat-label">Versant</span><span class="stat-value">${aspectName}</span></div>
+                <div class="card-stat full"><span class="stat-label">Pente locale</span><span class="stat-value ${slopeClass}">${slopeDeg}°</span></div>
             </div>
-            <div class="data-card"><div class="card-title"><i data-lucide="snowflake"></i> Météo & Neige</div>
-                <div class="card-grid">
-                    <div class="card-stat"><span class="stat-label">Température</span><span class="stat-value">${noonTemp !== null ? noonTemp + ' °C' : 'N/D'}</span></div>
-                    <div class="card-stat"><span class="stat-label">Épaisseur</span><span class="stat-value">${snowStr}</span></div>
-                </div>
-            </div>`;
+        </div>
+        <div class="data-card"><div class="card-title"><i data-lucide="snowflake"></i> Météo & Neige</div>
+            <div class="card-grid">
+                <div class="card-stat"><span class="stat-label">Température</span><span class="stat-value">${noonTemp}</span></div>
+                <div class="card-stat"><span class="stat-label">Épaisseur</span><span class="stat-value">${snowStr}</span></div>
+            </div>
+        </div>`;
 
-        beraBox.innerHTML = `
-            <div class="data-card"><div class="card-title"><i data-lucide="triangle-alert"></i> Avalanche (BERA)</div>
-                <div class="card-grid">
-                    <div class="card-stat full"><span class="stat-label">Massif détecté</span><span class="stat-value" style="color:#3b82f6;">${massifName}</span></div>
-                    <div class="card-stat"><span class="stat-label">Dernière Neige</span><span class="stat-value">${lastSnowDate}</span></div>
-                    <div class="card-stat"><span class="stat-label">Quantité</span><span class="stat-value">${lastSnowAmount}</span></div>
-                </div>
-                <a href="https://meteofrance.com/meteo-montagne/alpes-du-nord/risques-avalanche" target="_blank" class="link-bera"><i data-lucide="external-link" style="width:14px;"></i> Bulletin Météo France</a>
-            </div>`;
-            
-        lucide.createIcons();
-        if (panelContent) {
-            setTimeout(() => { panelContent.scrollTo({ top: panelContent.scrollHeight, behavior: 'smooth' }); }, 100);
-        }
-
-    } catch (error) { meteoBox.innerHTML = `<div class="empty-state"><p>Erreur réseau lors de l'analyse.</p></div>`; }
+    beraBox.innerHTML = `
+        <div class="data-card"><div class="card-title"><i data-lucide="triangle-alert"></i> Avalanche (BERA)</div>
+            <div class="card-grid">
+                <div class="card-stat full"><span class="stat-label">Massif détecté</span><span class="stat-value" style="color:#3b82f6;">${massifName}</span></div>
+                <div class="card-stat"><span class="stat-label">Dernière Neige</span><span class="stat-value">${lastSnowDate}</span></div>
+                <div class="card-stat"><span class="stat-label">Quantité</span><span class="stat-value">${lastSnowAmount}</span></div>
+            </div>
+            <a href="https://meteofrance.com/meteo-montagne/alpes-du-nord/risques-avalanche" target="_blank" class="link-bera"><i data-lucide="external-link" style="width:14px;"></i> Bulletin Météo France</a>
+        </div>`;
+        
+    lucide.createIcons();
+    if (panelContent) {
+        setTimeout(() => { panelContent.scrollTo({ top: panelContent.scrollHeight, behavior: 'smooth' }); }, 100);
+    }
 });
